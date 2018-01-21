@@ -1,0 +1,4 @@
+#!/bin/sh
+export PYTHONPATH="$1" # make faiss available
+echo "k=$3"
+cd bin && python run.py "$2" "$3"

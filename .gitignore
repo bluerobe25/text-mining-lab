@@ -1,0 +1,15 @@
+*.swp
+
+data/
+out/
+bin/init*.R
+
+# code chunk html output
+*.nb.html
+
+# Rstudio project files
+.Rproj.user
+*.Rproj
+.RData
+.Rhistory
+cache/

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+        <title>Binning und Hashing von großen Vektoren mit FAISS</title>
+        <link rel="stylesheet" href="./css/reveal.css">
+        <link rel="stylesheet" href="./css/theme/black.css" id="theme">
+        <link rel="stylesheet" href="./css/highlight/zenburn.css">
+        <link rel="stylesheet" href="./css/print/paper.css" type="text/css" media="print">
+
+
+    </head>
+    <body>
+
+        <div class="reveal">
+            <div class="slides"><section ><section data-markdown><script type="text/template">
+
+# Binning und Hashing von großen Vektoren mit FAISS
+
+<aside class="notes"><p>kNN-Suche syntaktische Duplikate im NewsCrawl</p>
+</aside></script></section><section data-markdown><script type="text/template">
+
+## Datenset
+
+* http://wortschatz.uni-leipzig.de/de/download
+
+  * Newscrawl
+
+</script></section></section><section ><section data-markdown><script type="text/template">
+
+## Bereinigung des Korpus'
+
+```{r}
+corpus <- VCorpus(VectorSource(sentences))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(
+  corpus,
+  content_transformer(
+    function(x) tolower(x)
+  )
+)
+corpus <- tm_map(corpus, stripWhitespace)
+```
+
+<aside class="notes"><p>Satzzeichen, überflüssige Leerzeichen werden entfernt. Zahlen werden wegen Vergleichsfehlern von Datum-Strings entfernt. Stopwörter bleiben, da sonst kurze, aber sehr unterschiedliche Sätze gleich aussehen.</p>
+</aside></script></section><section data-markdown><script type="text/template">
+
+## Word-Embedding
+
+```{r}
+term.ids <- lapply(as.list(corpus), function(doc) {
+  content <- doc$content
+  terms <- unlist(stri_split(content, regex = " "))
+  terms <- intersect(terms, dtm$dimnames$Terms)
+  term.ids <- lapply(terms, get.term.id)
+  term.ids[(length(term.ids)+1):d] = -num.terms
+  return(term.ids)
+})
+```
+
+<aside class="notes"><p>Korpus nach DTM (Tf-Gewichtung); Maximale Satzlänge (in Wörtern) ist untere Schranke für Dimensionalität.; naives Embedding: ersetze Terme durch ihrer Term-ID; entsehenden Vektoren hinten mit dem Wert <code>-num.terms</code> auffüllen -&gt; maximaler Abstand zu längeren Sätzen.; Alphabetische Ordnung -&gt; ähnliche Terme haben geringen Abstand; Dimensionalität hängt nicht von Korpusgröße ab, ist konstant</p>
+</aside></script></section><section data-markdown><script type="text/template">
+
+## FAISS-Indizes
+
+* Speicherverbrauch bei exakter Suche `< 120 MiB`:
+  * `IndexFlatL2` (Euklidische Distanz)
+  * `IndexFlatIP` (Skalarprodukt)
+
+<aside class="notes"><p>Dimensionsreduktion nicht nötig, da wie erläutert gering und konstant; Sonst mannigfaltige Quantisierungen mögliche Vergleich zum Localized Minimum Hashing interessant</p>
+</aside></script></section></section><section  data-markdown><script type="text/template">
+
+## Betrachtung LSH
+
+* _Binning_ und _Hashing_
+* `IndexLSH` in FAISS
+  * speicherintensiv
+  * Hashing unabhängig von Eingabedaten
+
+<aside class="notes"><p>Bessere, in FAISS integrierte Verfahren bieten Quantisierung in Abhängigkeit von Eingabedaten an.
+; Produktquantizer, Skalarquantizer, K-Means als vorgeschalteter Index; Ähnlichkeitssuche über Zentroiden</p>
+</aside></script></section><section  data-markdown><script type="text/template">
+
+## Ergebnisse (M = 30K)
+
+* `{13145, 13151, 13150, 13146}`
+
+```
+...
+
+{
+  'Email an Autor schreibenErschienen am 04.04.2011 auf Seite 16 Sollten die Mund-Pissoirs in einem neuen Potsdamer Club abgerissen werden?"',
+  'Email an Autor schreibenErschienen am 19.10.2010 auf Seite 23 Sollten die Mund-Pissoirs in einem neuen Potsdamer Club abgerissen werden?"',
+  'Email an Autor schreibenErschienen am 16.02.2017 auf Seite 14 Sollten die Mund-Pissoirs in einem neuen Potsdamer Club abgerissen werden?"',
+  'Email an Autor schreibenErschienen am 05.05.2010 auf Seite 22 Sollten die Mund-Pissoirs in einem neuen Potsdamer Club abgerissen werden?"',
+}
+
+...
+```
+
+<aside class="notes"><p>offenbar technische Duplikate</p>
+</aside></script></section><section  data-markdown><script type="text/template">
+
+## Ausblick
+
+* Semantische Äquivalenz?
+  * Word-Embedding liefert dann höhere Dimensionalität
+    * Kookkurenzen, Satz-Kookurenzen, POS-Tagging
+  * Quantizierung vs. LSH dann sehr interessant
+* Vollständige Implementierung in Python
+
+<aside class="notes"><p>Python -&gt; Zwischenablage in Datei nicht mehr nötig</p>
+</aside></script></section><section  data-markdown><script type="text/template">
+
+## Referenzen
+
+1. https://github.com/facebookresearch/faiss/wiki/
+2. https://github.com/facebookresearch/faiss/wiki/Guidelines-to-choose-an-index
+</script></section></div>
+        </div>
+
+        <script src="./lib/js/head.min.js"></script>
+        <script src="./js/reveal.js"></script>
+
+        <script>
+            function extend() {
+              var target = {};
+              for (var i = 0; i < arguments.length; i++) {
+                var source = arguments[i];
+                for (var key in source) {
+                  if (source.hasOwnProperty(key)) {
+                    target[key] = source[key];
+                  }
+                }
+              }
+              return target;
+            }
+
+            // Optional libraries used to extend on reveal.js
+            var deps = [
+              { src: './lib/js/classList.js', condition: function() { return !document.body.classList; } },
+              { src: './plugin/markdown/marked.js', condition: function() { return !!document.querySelector('[data-markdown]'); } },
+              { src: './plugin/markdown/markdown.js', condition: function() { return !!document.querySelector('[data-markdown]'); } },
+              { src: './plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+              { src: './plugin/zoom-js/zoom.js', async: true },
+              { src: './plugin/notes/notes.js', async: true },
+              { src: './plugin/math/math.js', async: true }
+            ];
+
+            // default options to init reveal.js
+            var defaultOptions = {
+              controls: true,
+              progress: true,
+              history: true,
+              center: true,
+              transition: 'default', // none/fade/slide/convex/concave/zoom
+              dependencies: deps
+            };
+
+            // options from URL query string
+            var queryOptions = Reveal.getQueryHash() || {};
+
+            var options = {"transition":"fade"};
+            options = extend(defaultOptions, options, queryOptions);
+        </script>
+
+
+        <script>
+            Reveal.initialize(options);
+        </script>
+    </body>
+</html>
